@@ -11,9 +11,8 @@ Building
 The IPMItool build system does not install the libraries required by this
 program. Therefore, a built source tree of IPMItool has to be available.
 Point the IPMITOOL entry in configure/RELEASE to the root of this tree.
-
-Another dependency is the EPICS Logfile library available at
-https://github.com/sus-ziti-uni-hd/epics-Logfile.
+ipmitool must be dated 2016-09-02 or later (current latest released version
+is 1.8.18 and doesn't yet define PICMG_UTCA_MAJOR_VERSION macro).
 
 Usage
 -----

@@ -3,6 +3,7 @@
 #include "ipmi_device_private.h"
 #include "ipmi_reader_thread.h"
 #include "ipmi_internal.h"
+#include "ipmi_log.h"
 
 #include <alarm.h>
 #include <algorithm>
@@ -21,7 +22,6 @@
 #include <iomanip>
 #include <iostream>
 #include <link.h>
-#include <logger.h>
 #include <mbbiDirectRecord.h>
 #include <mbbiRecord.h>
 #include <memory>
@@ -29,7 +29,6 @@
 #include <recSup.h>
 #include <sstream>
 #include <string.h>
-#include <subsystem_registrator.h>
 #include <utility>
 
 extern "C" {
@@ -50,15 +49,12 @@ extern "C" {
 
 
 namespace {
-SuS::logfile::subsystem_registrator log_id("IPMIDev");
+    std::atomic<unsigned> nextid(0U);
 
-std::atomic<unsigned> nextid(0U);
-
-template<class S> long process(S* rec) {
-  typedef long(*real_signature)(dbCommon*);
-  return (*reinterpret_cast<real_signature>(rec->rset->process))(reinterpret_cast<dbCommon*>(rec));
-}
-
+    template<class S> long process(S* rec) {
+      typedef long(*real_signature)(dbCommon*);
+      return (*reinterpret_cast<real_signature>(rec->rset->process))(reinterpret_cast<dbCommon*>(rec));
+    }
 } // namespace
 
 
@@ -96,7 +92,7 @@ void Device::aiCallback(::CALLBACK* _cb) {
 
     if (*priv->good) {
        *priv->good = false;
-      SuS_LOG_PRINTF(warning, log_id(), "sensor 0x%02x/%s: Read invalid.", priv->sensor.ipmb, priv->sensor.name.c_str());
+      IPMI_LOG_WARN("sensor 0x%02x/%s: Read invalid.", priv->sensor.ipmb, priv->sensor.name.c_str());
     } // if
     return;
   } // if
@@ -112,7 +108,7 @@ void Device::aiCallback(::CALLBACK* _cb) {
   dbScanUnlock((dbCommon*)priv->rec);
   if (!*priv->good) {
      *priv->good = true;
-     SuS_LOG_PRINTF(info, log_id(), "sensor 0x%02x/%s: Read valid again.", priv->sensor.ipmb, priv->sensor.name.c_str());
+     IPMI_LOG_INFO("sensor 0x%02x/%s: Read valid again.", priv->sensor.ipmb, priv->sensor.name.c_str());
   } // if
 } // Device::aiCallback
 
@@ -150,7 +146,7 @@ void Device::mbbiDirectCallback(::CALLBACK* _cb) {
 
     if (*priv->good) {
        *priv->good = false;
-      SuS_LOG_PRINTF(warning, log_id(), "sensor 0x%02x/%s: Read invalid.", priv->sensor.ipmb, priv->sensor.name.c_str());
+      IPMI_LOG_WARN("sensor 0x%02x/%s: Read invalid.", priv->sensor.ipmb, priv->sensor.name.c_str());
     } // if
     return;
   } // if
@@ -167,7 +163,7 @@ void Device::mbbiDirectCallback(::CALLBACK* _cb) {
   dbScanUnlock((dbCommon*)priv->rec);
   if (!*priv->good) {
      *priv->good = true;
-     SuS_LOG_PRINTF(info, log_id(), "sensor 0x%02x/%s: Read valid again.", priv->sensor.ipmb, priv->sensor.name.c_str());
+     IPMI_LOG_INFO("sensor 0x%02x/%s: Read valid again.", priv->sensor.ipmb, priv->sensor.name.c_str());
   } // if
 } // Device::mbbiDirectCallback
 
@@ -205,7 +201,7 @@ void Device::mbbiCallback(::CALLBACK* _cb) {
 
     if (*priv->good) {
        *priv->good = false;
-      SuS_LOG_PRINTF(warning, log_id(), "sensor 0x%02x/%s: Read invalid.", priv->sensor.ipmb, priv->sensor.name.c_str());
+      IPMI_LOG_WARN("sensor 0x%02x/%s: Read invalid.", priv->sensor.ipmb, priv->sensor.name.c_str());
     } // if
     return;
   } // if
@@ -216,14 +212,14 @@ void Device::mbbiCallback(::CALLBACK* _cb) {
   ::mbbiRecord* const mbbi = reinterpret_cast< ::mbbiRecord*>(priv->rec);
 //  mbbi->val = result.value.ival;
   mbbi->rval = 0;
-  SuS_LOG_PRINTF(finest, log_id(), "%s data %04x reading %02x", priv->rec->name, result.rval, result.value.ival);
+  IPMI_LOG_DEBUG("%s data %04x reading %02x", priv->rec->name, result.rval, result.value.ival);
   while(result.rval >>= 1) ++mbbi->rval;
   typedef long(*real_signature)(dbCommon*);
   (*reinterpret_cast<real_signature>(priv->rec->rset->process))(reinterpret_cast<dbCommon*>(priv->rec));
   dbScanUnlock((dbCommon*)priv->rec);
   if (!*priv->good) {
      *priv->good = true;
-     SuS_LOG_PRINTF(info, log_id(), "sensor 0x%02x/%s: Read valid again.", priv->sensor.ipmb, priv->sensor.name.c_str());
+     IPMI_LOG_INFO("sensor 0x%02x/%s: Read valid again.", priv->sensor.ipmb, priv->sensor.name.c_str());
   } // if
 } // Device::mbbiCallback
 
@@ -249,7 +245,7 @@ bool Device::mbbiQuery(const sensor_id_t& _sensor, result_t& _result) {
 const ::sensor_reading* Device::ipmiQuery(const sensor_id_t& _sensor) {
   const auto& i = sensors_.find(_sensor);
   if (i == sensors_.end()) {
-    SuS_LOG_PRINTF(severe, log_id(), "Sensor %s not found.", _sensor.prettyPrint().c_str());
+    IPMI_LOG_ERROR("Sensor %s not found.", _sensor.prettyPrint().c_str());
     assert(false);
   }
 
@@ -285,20 +281,20 @@ bool Device::check_PICMG() {
         (rsp->data[1] & 0x0F) == PICMG_UTCA_MAJOR_VERSION)) {
       version_accepted = true;
     }
-      SuS_LOG_STREAM(finer, log_id(), "PICMG " <<(int)(rsp->data[1] & 0x0F) <<"."<< (int)((rsp->data[1] & 0xF0)>>4)<<" detected.");
+      IPMI_LOG_DEBUG("PICMG " <<(int)(rsp->data[1] & 0x0F) <<"."<< (int)((rsp->data[1] & 0xF0)>>4)<<" detected.");
   }
   }
-  SuS_LOG_STREAM(finer, log_id(), "PICMG " << (version_accepted ? "" : "not ") << "accepted.");
+  IPMI_LOG_DEBUG("PICMG " << (version_accepted ? "" : "not ") << "accepted.");
   return version_accepted;
 } // Device::check_PICMG
 
 
 bool Device::connect(const std::string& _hostname, const std::string& _username,
                      const std::string& _password, const std::string& _proto, int _privlevel) {
-  SuS_LOG_STREAM(config, log_id(), "Connecting to '" << _hostname << "'.");
+  IPMI_LOG_INFO("Connecting to '%s'.", _hostname.c_str());
   intf_ = ::ipmi_intf_load(const_cast<char*>(_proto.c_str()));
   if (!intf_) {
-    SuS_LOG_PRINTF(severe, log_id(), "Cannot load interface '%s'.", _proto.c_str());
+    IPMI_LOG_ERROR("Cannot load interface '%s'.", _proto.c_str());
     return false;
   }
 
@@ -314,17 +310,17 @@ bool Device::connect(const std::string& _hostname, const std::string& _username,
   ::ipmi_intf_session_set_lookupbit(intf_, 0x10);
 
   if ((intf_->open == NULL) || (intf_->open(intf_) == -1)) {
-    SuS_LOG_STREAM(severe, log_id(), "Connection to '" << _hostname << "' failed.");
+    IPMI_LOG_ERROR("Connection to '%s'.", _hostname.c_str());
     ::ipmi_cleanup(intf_);
     intf_ = NULL;
     return false;
   } // if
   // else
-  SuS_LOG_STREAM(info, log_id(), "Connected to '" << _hostname << "'.");
+  IPMI_LOG_INFO("Connected to '%s'.", _hostname.c_str());
 
   local_addr_ = intf_->target_addr;
 
-  SuS_LOG(finer, log_id(), "Starting ReaderThread.");
+  IPMI_LOG_DEBUG("Starting ReaderThread.");
   readerThread_ = new ReaderThread(this);
   readerThread_->start();
 
@@ -334,7 +330,7 @@ bool Device::connect(const std::string& _hostname, const std::string& _username,
 
 void Device::detectSensors() {
   if (!intf_) {
-    SuS_LOG(warning, log_id(), "Not scanning: not connected.");
+    IPMI_LOG_WARN("Not scanning: not connected.");
     return;
   }
   sensors_.clear();
@@ -343,7 +339,7 @@ void Device::detectSensors() {
   find_ipmb();
   for (const auto& i : slaves_) iterateSDRs(i);
 
-  SuS_LOG_STREAM(fine, log_id(), "Total sensor count: " << sensors_.size());
+  IPMI_LOG_DEBUG("Total sensor count: %zu", sensors_.size());
 
   for (const auto& i : sensors_) {
     if (!i.second.sdr_record()) {
@@ -373,14 +369,14 @@ void Device::detectSensors() {
       ss << " (" << ::sensor_type_desc[i.second.sdr_record()->sensor.type] << ")";
     ss << "." << std::ends;
 
-    SuS_LOG(finer, log_id(), ss.str());
+    IPMI_LOG_DEBUG(ss.str().c_str());
   } // for i
 } // Device::detectSensors
 
 
 void Device::scanActiveIPMBs() {
   if (!intf_) {
-    SuS_LOG(warning, log_id(), "Not scanning: not connected.");
+    IPMI_LOG_WARN("Not scanning: not connected.");
     return;
   }
   for (const auto i : active_ipmbs_) iterateSDRs(i);
@@ -389,13 +385,13 @@ void Device::scanActiveIPMBs() {
 
 void Device::dumpDatabase(const std::string& _file) {
   if (!intf_) {
-    SuS_LOG(warning, log_id(), "Not connected.");
+    IPMI_LOG_WARN("Not connected.");
     return;
   }
 
   std::ofstream of(_file);
   if(!of.is_open()) {
-    SuS_LOG_STREAM(warning, log_id(), "Cannot open '" << _file << "' for writing.");
+    IPMI_LOG_WARN("Cannot open '%s'.'", _file.c_str());
     return;
   }
 
@@ -441,9 +437,9 @@ void Device::dumpDatabase(const std::string& _file) {
             << " C" << +sensor.first.entity << " S" << +sensor.first.instance <<" @"<< name <<"\")" << std::endl
             << "}" << std::endl;
   } // for sensor
- 
+
   if (!of.good()) {
-    SuS_LOG(warning, log_id(), "Write failed.");
+    IPMI_LOG_WARN("Write failed.");
   }
   of.close();
 } // Device::dumpDatabase
@@ -488,7 +484,7 @@ void Device::handleFullSensor(slave_addr_t _addr, ::sdr_record_full_sensor* _rec
   if (_rec->cmn.sensor.type <= SENSOR_TYPE_MAX)
     ss << " => " << ::sensor_type_desc[_rec->cmn.sensor.type];
   ss << ")." << std::ends;
-  SuS_LOG(finest, log_id(), ss.str());
+  IPMI_LOG_DEBUG(ss.str().c_str());
 
   fillPVsFromSDR(id, i.sdr_record);
 } // Device::handleFullSensor
@@ -511,7 +507,7 @@ void Device::handleCompactSensor(slave_addr_t _addr, ::sdr_record_compact_sensor
   if (_rec->cmn.sensor.type <= SENSOR_TYPE_MAX)
     ss << " => " << ::sensor_type_desc[_rec->cmn.sensor.type];
   ss << ")." << std::ends;
-  SuS_LOG(finest, log_id(), ss.str());
+  IPMI_LOG_DEBUG(ss.str().c_str());
 
   fillPVsFromSDR(id, i.sdr_record);
 } // Device::handleCompactSensor
@@ -555,18 +551,17 @@ void Device::initAiRecord(::aiRecord* _pai) {
 void Device::fillAiRecord(const any_record_ptr& _rec, const any_sensor_ptr& i) {
   initRecordDesc(_rec, i);
   auto _pai = static_cast<::aiRecord *>(_rec);
-  SuS_LOG_STREAM(finest, log_id(), "SENSOR " << +_pai->inp.value.abio.card);
-  SuS_LOG_STREAM(finest, log_id(), "  THRESH "
-                 << +i()->mask.type.threshold.read.unr << " "
-                 << +i()->mask.type.threshold.read.ucr << " "
-                 << +i()->mask.type.threshold.read.unc << " "
-                 << +i()->mask.type.threshold.read.lnr << " "
-                 << +i()->mask.type.threshold.read.lcr << " "
-                 << +i()->mask.type.threshold.read.lnc);
-  SuS_LOG_STREAM(finest, log_id(), "  HYSTERESIS "
-                 << +i()->sensor.capabilities.hysteresis);
+  IPMI_LOG_DEBUG("SENSOR %d", +_pai->inp.value.abio.card);
+  IPMI_LOG_DEBUG("  THRESH %u %u %u %u %u %u",
+                 +i()->mask.type.threshold.read.unr,
+                 +i()->mask.type.threshold.read.ucr,
+                 +i()->mask.type.threshold.read.unc,
+                 +i()->mask.type.threshold.read.lnr,
+                 +i()->mask.type.threshold.read.lcr,
+                 +i()->mask.type.threshold.read.lnc);
+  IPMI_LOG_DEBUG("  HYSTERESIS %d", +i()->sensor.capabilities.hysteresis);
   if (i.type == SDR_RECORD_TYPE_FULL_SENSOR) {
-    SuS_LOG_STREAM(finest, log_id(), "  LINEAR " << +static_cast<::sdr_record_full_sensor*>(i)->linearization);
+    IPMI_LOG_DEBUG("  LINEAR %d", +static_cast<::sdr_record_full_sensor*>(i)->linearization);
   }
 
   // TODO: for compact sensor
@@ -696,7 +691,7 @@ void Device::fillMbbiRecord(const any_record_ptr& _rec, const any_sensor_ptr& i)
 
 
 void Device::iterateSDRs(slave_addr_t _addr, bool _force_internal) {
-  SuS_LOG_STREAM(finest, log_id(), "iterating @0x" << std::hex << +_addr << (_force_internal ? ", internal." : "."));
+  IPMI_LOG_DEBUG("iterating @0x%08X%s", +_addr, (_force_internal ? ", internal." : "."));
   intf_->target_addr = _addr;
 
   std::unique_ptr<::ipmi_sdr_iterator, decltype(::free)*> itr{::ipmi_sdr_start(intf_, _force_internal ? 1 : 0), ::free};
@@ -723,13 +718,13 @@ void Device::iterateSDRs(slave_addr_t _addr, bool _force_internal) {
         ::free(rec);
         break;
       default:
-        SuS_LOG_STREAM(finest, log_id(), "ignoring sensor type 0x" << std::hex << +header->type << ".");
+        IPMI_LOG_DEBUG("ignoring sensor type 0x%08X.", +header->type);
         ::free(rec);
         break;
     } // switch
   } // while
 
-  SuS_LOG_STREAM(finer, log_id(), "found " << found << " sensors @0x" << std::hex << +_addr << (_force_internal ? ", internal." : "."));
+  IPMI_LOG_DEBUG("found %u sensors @0x%08X%s", found, +_addr, (_force_internal ? ", internal." : "."));
 } // Device::iterateSDRs
 
 
@@ -738,7 +733,7 @@ bool Device::ping() {
   bool ret = intf_->keepalive(intf_) == 0;
   mutex_.unlock();
   if (!ret) {
-    SuS_LOG(warning, log_id(), "keepalive failed!");
+    IPMI_LOG_WARN("keepalive failed!");
   }
   return ret;
 } // Device::ping
@@ -821,4 +816,3 @@ Device::query_job_t::query_job_t(const ::link& _loc, query_func_t _f, unsigned _
 
 
 } // namespace IPMIIOC
-

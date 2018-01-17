@@ -2,6 +2,7 @@
 #include "ipmi_connection.h"
 #include "ipmi_device.h"
 #include "ipmi_internal.h"
+#include "ipmi_log.h"
 
 extern "C" {
 #include <ipmitool/ipmi.h>
@@ -11,19 +12,13 @@ extern "C" {
 #include <aiRecord.h>
 #include <errlog.h>
 #include <link.h>
-#include <logger.h>
 #include <map>
 #include <mbbiDirectRecord.h>
 #include <mbbiRecord.h>
 #include <new>
 #include <sstream>
 #include <stdlib.h>
-#include <subsystem_registrator.h>
 #include <utility>
-
-namespace {
-SuS::logfile::subsystem_registrator log_id("IPMIConn");
-} // namespace
 
 
 namespace {
@@ -91,7 +86,7 @@ void ipmiReadMbbiSensor(mbbiRecord* _rec) {
 void ipmiScanDevice(int _id) {
  const auto& it = IPMIIOC::s_interfaces.find(_id);
  if (it == IPMIIOC::s_interfaces.end()) {
-   SuS_LOG_STREAM(warning, log_id(), "Device " << _id << " not found.");
+   IPMI_LOG_WARN("Device %d not found.", _id);
    return;
  }
  it->second->detectSensors();
@@ -100,12 +95,12 @@ void ipmiScanDevice(int _id) {
 
 void ipmiDumpDatabase(int _id, const char* _file) {
  if (!_file) {
-   SuS_LOG(warning, log_id(), "No filename provided.");
+   IPMI_LOG_WARN("No filename provided.");
    return;
  }
  const auto& it = IPMIIOC::s_interfaces.find(_id);
  if (it == IPMIIOC::s_interfaces.end()) {
-   SuS_LOG(warning, log_id(), "Device not known.");
+   IPMI_LOG_WARN("Device not known.");
    return;
  }
  it->second->dumpDatabase(_file);
