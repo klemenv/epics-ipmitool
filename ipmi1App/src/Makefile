@@ -15,7 +15,6 @@ DBD += ipmi1.dbd
 # ipmi1.dbd will be made up from these files:
 ipmi1_DBD += base.dbd
 ipmi1_DBD += ipmitool.dbd
-ipmi1_DBD += Logfile.dbd
 
 # Include dbd files from all support applications:
 #ipmi1_DBD += xxx.dbd
@@ -36,7 +35,6 @@ ipmi1_SRCS_vxWorks += -nil-
 # Finally link to the EPICS Base libraries
 ipmi1_LIBS += $(EPICS_BASE_IOC_LIBS)
 ipmi1_LIBS += ipmitool
-ipmi1_LIBS += Logfile EPICSLog
 
 #===========================
 

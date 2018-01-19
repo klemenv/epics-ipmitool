@@ -6,6 +6,10 @@
 #include <mbbiDirectRecord.h>
 #include <mbbiRecord.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void ipmiConnect(int _id, const char* _hostname, const char* _username,
                  const char* _password, const char* _proto, int _privlevel);
 
@@ -28,5 +32,8 @@ void ipmiDumpDatabase(int _id, const char* _file);
 /** Start first scan over active IPMBs. */
 void ipmiInitialScan();
 
+#ifdef __cplusplus
+}
 #endif
 
+#endif

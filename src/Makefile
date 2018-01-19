@@ -7,7 +7,6 @@ include $(TOP)/configure/CONFIG
 LIBRARY_IOC += ipmitool
 
 DBD += ipmitool.dbd
-ipmitool_DBD += Logfile.dbd
 
 ipmitool_SRCS += epics_device.c
 ipmitool_SRCS += epics_functions.c
@@ -19,11 +18,10 @@ ipmitool_SRCS += ipmi_reader_thread.cc
 ipmitool_SRCS += ipmi_types.cc
 
 ipmitool_LIBS += $(EPICS_BASE_IOC_LIBS)
-ipmitool_LIBS += Logfile EPICSLog
+ipmitool_SYS_LIBS += ssl crypto
 
 STATIC_LDLIBS += $(IPMITOOL)/lib/.libs/libipmitool.a
 STATIC_LDLIBS += $(IPMITOOL)/src/plugins/.libs/libintf.a
-LDFLAGS += -lssl -lcrypto
 
 USR_INCLUDES += -I $(IPMITOOL)/include
 USR_INCLUDES += -I $(IPMITOOL)/src/plugins/lan
